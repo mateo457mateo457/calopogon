@@ -1,22 +1,27 @@
 # calculate_return_interval.py
 
+# Load libraries
 from pathlib import Path
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Point
 
+# Display options
 pd.set_option("display.max_columns", None)   # show all columns
 pd.set_option("display.width", None)         # use full console width
 pd.set_option("display.max_colwidth", None)  # don't truncate cell contents
 pd.set_option("display.max_rows", 100)       # show up to 100 rows before truncating
 
+# Paths
 DATA = Path("Data")
 FIRE = DATA / "fire"
 
+###--- Load Fire History Data ---###
+
+# Read fire history shapefiles into GeoDataFrames
 old = gpd.read_file(FIRE / "1977_2005" / "APAFR_Burn_History_1977_2005.shp")
 new = gpd.read_file(FIRE / "2006_2026" / "APAFR_Burn_Histroy_2006_2026.shp")
 
-# 1977-2005: full date, falling back to the 15th if only year and month are valid
+# Derive dates for "old" from available columns and fill missing dates with the month and the 15th if available
 parts = old[["Year_", "Month_", "day_"]].rename(columns={"Year_": "year", "Month_": "month", "day_": "day"})
 full_date = pd.to_datetime(parts, errors="coerce")
 mid_month = pd.to_datetime(parts.assign(day=15), errors="coerce")
@@ -26,7 +31,8 @@ old["day_filled"] = full_date.isna() & mid_month.notna()
 old["fire_type"] = old["Type"].str.lower()
 old["source"] = "1977_2005"
 
-# 2006-2026
+# Derive dates for "new"; date is stored in fireStartD, which is already a datetime column,
+# but we normalize it to remove the time component
 new["burn_date"] = pd.to_datetime(new["fireStartD"]).dt.normalize()
 new["day_filled"] = False
 new["fire_type"] = new["wildland_1"].str.lower()
@@ -34,7 +40,7 @@ new["source"] = "2006_2026"
 new = new.to_crs(26917)
 new["geometry"] = new.geometry.force_2d()
 
-# Combine
+# Combine old and new
 cols = ["burn_date", "day_filled", "fire_type", "source", "geometry"]
 fires = gpd.GeoDataFrame(pd.concat([old[cols], new[cols]], ignore_index=True),
                          geometry="geometry", crs=26917)
@@ -44,6 +50,8 @@ print("Day set to 15:", fires["day_filled"].sum())
 print("Dropped (no year/month):", fires["burn_date"].isna().sum())
 fires = fires.dropna(subset=["burn_date"]).reset_index(drop=True)
 print(fires.shape)
+
+###--- Load Calopogon  Data ---###
 
 # Read Calopogon data
 _f = "Calopogon multiflorus Phenology Data COMPREHENSIVE 2026JUN22 WITH SEASON.xlsx"
@@ -69,7 +77,8 @@ pheno = pd.read_excel(DATA / _f, parse_dates=["Burn_Date", "Survey_Date"])
 #           date.
 #
 #   Step 4: For each row, count the burns and find the first and
-#           last burn dates. FRI = (last - first) / (n - 1).
+#           last burn dates. FRI = (last - first) / (n - 1), which
+#           equals the mean interval between consecutive burns.
 #           Rows with fewer than 2 burns get no FRI.
 #
 #   Step 5: Attach the FRI results to pheno and save.
@@ -101,8 +110,9 @@ print("Rows with no coordinates:", pheno["loc_id"].isna().sum())
 
 # Step 2: Spatial join locations to burn polygons
 # - Match each location point to every burn polygon that contains it
-# - Result: one row per location-burn pair = each location's full fire history
-# - Keep one row per location per burn date (in case a burn was split into pieces)
+# - Result: a location's fire history is described by a set of rows with each row
+#   having the location and a burn date
+# - A location burns at most once per date; drop duplicate location-date rows
 
 fire_hist = gpd.sjoin(locs, fires, how="inner", predicate="within")
 
