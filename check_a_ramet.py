@@ -22,7 +22,7 @@ pd.set_option("display.max_colwidth", None)
 pd.set_option("display.max_rows", 100)
 
 # Settings
-ROW = 55  # row of the output file to check (Excel row number = ROW + 2)
+ROW = 66  # row of the output file to check (Excel row number = ROW + 2)
 
 # Paths
 DATA = Path("Data")
