@@ -171,10 +171,12 @@ pheno = (pheno.merge(fri, on="row_id", how="left")
               .drop(columns="row_id"))
 
 # Check
-print("Rows:", len(pheno))                       # should still be 12439
+print("Rows:", len(pheno)) # should still be 12439
 print("Rows with no FRI:", pheno["FRI_years"].isna().sum())
+# 100 have no FRI because they have no coordinates; work was done on this 11/10/2026 and the locations could not be found
 print(pheno[["Survey_Date", "Lat", "Long", "n_burns", "first_burn", "last_burn", "FRI_years"]].head())
 
 # Save
-pheno.to_excel(DATA / "Calopogon multiflorus Phenology Data COMPREHENSIVE 2026JUN22 WITH SEASON AND FRI.xlsx",
-               index=False)
+out_file = DATA / "Calopogon multiflorus Phenology Data COMPREHENSIVE 2026JUN22 WITH SEASON AND FRI.xlsx"
+pheno.to_excel(out_file, index=False)
+print("Saved to:", out_file.resolve())
